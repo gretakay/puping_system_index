@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>權限管理</title>
-<script src="https://accounts.google.com/gsi/client" async defer onload="initGoogleSignIn()"></script>
 <style>
   body {
     font-family: -apple-system, "Segoe UI", sans-serif;
@@ -13,14 +12,36 @@
     padding: 2rem 1rem;
   }
   #login {
-    display: flex;
-    justify-content: center;
-    margin-top: 4rem;
+    max-width: 320px;
+    margin: 4rem auto 0;
+    text-align: center;
+  }
+  #login h2 {
+    margin-bottom: 1.5rem;
+  }
+  #login input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: .6rem;
+    font-size: 1rem;
+    margin-bottom: .75rem;
+  }
+  #login button {
+    padding: .6rem 1.5rem;
+    font-size: 1rem;
+    cursor: pointer;
   }
   #panel {
     display: none;
     max-width: 900px;
     margin: 0 auto;
+  }
+  #topRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .5rem;
   }
   table {
     border-collapse: collapse;
@@ -33,20 +54,27 @@
     padding: .5rem .75rem;
     text-align: center;
   }
-  th {
-    background: #f0f0f0;
-  }
-  button {
-    cursor: pointer;
-  }
+  th { background: #f0f0f0; }
+  button { cursor: pointer; }
 </style>
 </head>
 <body>
 
-<div id="login"><div id="g_id_signin"></div></div>
+<div id="login">
+  <h2>權限管理登入</h2>
+  <input id="codeInput" type="password" placeholder="請輸入管理者代碼" autocomplete="off">
+  <br>
+  <button onclick="login()">登入</button>
+</div>
 
 <div id="panel">
-  <h2 style="text-align:center">權限管理</h2>
+  <div id="topRow">
+    <h2>權限管理</h2>
+    <div>
+      <a href="index.html">回入口網站</a>　|
+      <button onclick="logout()">登出</button>
+    </div>
+  </div>
   <table>
     <thead><tr id="headerRow"></tr></thead>
     <tbody id="tableBody"></tbody>
@@ -57,37 +85,44 @@
 </div>
 
 <script src="config.js"></script>
+<script src="session.js"></script>
 <script>
 var SYSTEMS = ['物管系統', '會議室預約', '補課查看', '遊覽車'];
-var idToken = null;
+var session = makeSession('admin');
+var adminCode = null;
 
-function initGoogleSignIn() {
-  google.accounts.id.initialize({
-    client_id: OAUTH_CLIENT_ID,
-    callback: handleCredentialResponse
-  });
-  google.accounts.id.renderButton(
-    document.getElementById('g_id_signin'),
-    { theme: 'outline', size: 'large' }
-  );
-}
+document.getElementById('codeInput').addEventListener('keydown', function (evt) {
+  if (evt.key === 'Enter') login();
+});
 
-function handleCredentialResponse(response) {
-  idToken = response.credential;
+function login() {
+  var code = document.getElementById('codeInput').value.trim();
+  if (!code) return;
+  adminCode = code;
 
   callApi({ action: 'getPermissions' }).then(function (result) {
     if (!result.ok) {
       alert('錯誤：' + result.error);
+      adminCode = null;
       return;
     }
+    session.save(code, '管理員');
     document.getElementById('login').style.display = 'none';
     document.getElementById('panel').style.display = 'block';
     renderTable(result.permissions);
   });
 }
 
+function logout() {
+  session.clear();
+  adminCode = null;
+  document.getElementById('panel').style.display = 'none';
+  document.getElementById('login').style.display = 'block';
+  document.getElementById('codeInput').value = '';
+}
+
 function callApi(payload) {
-  payload.idToken = idToken;
+  payload.code = adminCode;
   return fetch(API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain' },
@@ -97,7 +132,7 @@ function callApi(payload) {
 
 function renderTable(rows) {
   var headerRow = document.getElementById('headerRow');
-  headerRow.innerHTML = '<th>Email</th><th>姓名</th>'
+  headerRow.innerHTML = '<th>代碼</th><th>姓名</th>'
     + SYSTEMS.map(function (s) { return '<th>' + s + '</th>'; }).join('')
     + '<th>操作</th>';
 
@@ -109,9 +144,9 @@ function renderTable(rows) {
 function buildRow(row) {
   var tr = document.createElement('tr');
 
-  var emailTd = document.createElement('td');
-  emailTd.textContent = row['Email'];
-  tr.appendChild(emailTd);
+  var codeTd = document.createElement('td');
+  codeTd.textContent = row['代碼'];
+  tr.appendChild(codeTd);
 
   var nameTd = document.createElement('td');
   var nameInput = document.createElement('input');
@@ -140,7 +175,7 @@ function buildRow(row) {
 
     callApi({
       action: 'setPermission',
-      targetEmail: row['Email'],
+      targetCode: row['代碼'],
       name: nameInput.value,
       systems: systemFlags
     }).then(function (result) {
@@ -153,8 +188,8 @@ function buildRow(row) {
   delBtn.textContent = '刪除';
   delBtn.style.marginLeft = '.5rem';
   delBtn.onclick = function () {
-    if (!confirm('確定刪除 ' + row['Email'] + '？')) return;
-    callApi({ action: 'removeUser', targetEmail: row['Email'] }).then(function (result) {
+    if (!confirm('確定刪除代碼 ' + row['代碼'] + '？')) return;
+    callApi({ action: 'removeUser', targetCode: row['代碼'] }).then(function (result) {
       if (!result.ok) {
         alert('刪除失敗：' + result.error);
         return;
@@ -169,10 +204,12 @@ function buildRow(row) {
 }
 
 function addRow() {
-  var email = prompt('請輸入新使用者的 Email：');
-  if (!email) return;
-  document.getElementById('tableBody').appendChild(buildRow({ 'Email': email, '姓名': '' }));
+  var code = prompt('請輸入新使用者的代碼：');
+  if (!code) return;
+  document.getElementById('tableBody').appendChild(buildRow({ '代碼': code, '姓名': '' }));
 }
+
+session.initIdleTimeout(logout);
 </script>
 </body>
 </html>

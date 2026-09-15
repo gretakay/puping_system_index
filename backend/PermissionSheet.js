@@ -6,14 +6,19 @@ function getSystemLink(systemName) {
   return link;
 }
 
-function getSheet() {
+function getPermissionSheet() {
   var sheetId = PropertiesService.getScriptProperties().getProperty('PERMISSION_SHEET_ID');
   if (!sheetId) throw new Error('尚未設定 Script Property：PERMISSION_SHEET_ID，請先執行 setup()');
   return SpreadsheetApp.openById(sheetId).getSheetByName('permissions');
 }
 
+function getLoginLogSheet() {
+  var sheetId = PropertiesService.getScriptProperties().getProperty('PERMISSION_SHEET_ID');
+  return SpreadsheetApp.openById(sheetId).getSheetByName('logins');
+}
+
 function getAllPermissions() {
-  var sheet = getSheet();
+  var sheet = getPermissionSheet();
   var values = sheet.getDataRange().getValues();
   var headers = values[0];
 
@@ -24,24 +29,20 @@ function getAllPermissions() {
   });
 }
 
-function getLinksForUser(email) {
-  var rows = getAllPermissions();
-  var row = rows.filter(function (r) { return r['Email'] === email; })[0];
-  if (!row) return [];
-
+function getLinksForRow(row) {
   return SYSTEMS
     .filter(function (sys) { return row[sys] === true; })
     .map(function (sys) { return { name: sys, url: getSystemLink(sys) }; });
 }
 
-function setPermission(email, name, systemFlags) {
-  var sheet = getSheet();
+function setPermission(code, name, systemFlags) {
+  var sheet = getPermissionSheet();
   var values = sheet.getDataRange().getValues();
   var headers = values[0];
-  var emailCol = headers.indexOf('Email');
+  var codeCol = headers.indexOf('代碼');
 
   for (var i = 1; i < values.length; i++) {
-    if (values[i][emailCol] === email) {
+    if (String(values[i][codeCol]) === String(code)) {
       var rowIndex = i + 1;
       sheet.getRange(rowIndex, headers.indexOf('姓名') + 1).setValue(name);
       SYSTEMS.forEach(function (sys) {
@@ -53,7 +54,7 @@ function setPermission(email, name, systemFlags) {
   }
 
   var newRow = headers.map(function (h) {
-    if (h === 'Email') return email;
+    if (h === '代碼') return code;
     if (h === '姓名') return name;
     if (SYSTEMS.indexOf(h) !== -1) return !!(systemFlags && systemFlags[h]);
     return false;
@@ -61,16 +62,20 @@ function setPermission(email, name, systemFlags) {
   sheet.appendRow(newRow);
 }
 
-function removeUser(email) {
-  var sheet = getSheet();
+function removeUser(code) {
+  var sheet = getPermissionSheet();
   var values = sheet.getDataRange().getValues();
   var headers = values[0];
-  var emailCol = headers.indexOf('Email');
+  var codeCol = headers.indexOf('代碼');
 
   for (var i = 1; i < values.length; i++) {
-    if (values[i][emailCol] === email) {
+    if (String(values[i][codeCol]) === String(code)) {
       sheet.deleteRow(i + 1);
       return;
     }
   }
+}
+
+function logLogin(code, name) {
+  getLoginLogSheet().appendRow([new Date(), code, name]);
 }

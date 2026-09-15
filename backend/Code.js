@@ -14,28 +14,26 @@ function doPost(e) {
 function handleAction(params) {
   var action = params.action;
 
-  if (action === 'getLinks') {
-    var email = verifyIdToken(params.idToken);
-    return jsonResponse({ ok: true, links: getLinksForUser(email) });
+  if (action === 'login') {
+    var row = validateCode(params.code);
+    logLogin(params.code, row['姓名']);
+    return jsonResponse({ ok: true, name: row['姓名'], links: getLinksForRow(row) });
   }
 
   if (action === 'getPermissions') {
-    var adminEmail = verifyIdToken(params.idToken);
-    requireAdmin(adminEmail);
+    requireAdminCode(params.code);
     return jsonResponse({ ok: true, permissions: getAllPermissions() });
   }
 
   if (action === 'setPermission') {
-    var adminEmail2 = verifyIdToken(params.idToken);
-    requireAdmin(adminEmail2);
-    setPermission(params.targetEmail, params.name, params.systems);
+    requireAdminCode(params.code);
+    setPermission(params.targetCode, params.name, params.systems);
     return jsonResponse({ ok: true });
   }
 
   if (action === 'removeUser') {
-    var adminEmail3 = verifyIdToken(params.idToken);
-    requireAdmin(adminEmail3);
-    removeUser(params.targetEmail);
+    requireAdminCode(params.code);
+    removeUser(params.targetCode);
     return jsonResponse({ ok: true });
   }
 

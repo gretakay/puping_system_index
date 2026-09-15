@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>入口網站</title>
-<script src="https://accounts.google.com/gsi/client" async defer onload="initGoogleSignIn()"></script>
 <style>
   body {
     font-family: -apple-system, "Segoe UI", sans-serif;
@@ -13,14 +12,34 @@
     padding: 2rem 1rem;
   }
   #login {
-    display: flex;
-    justify-content: center;
-    margin-top: 4rem;
+    max-width: 320px;
+    margin: 4rem auto 0;
+    text-align: center;
   }
-  #cards {
+  #login h2 {
+    margin-bottom: 1.5rem;
+  }
+  #login input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: .6rem;
+    font-size: 1rem;
+    margin-bottom: .75rem;
+  }
+  #login button {
+    padding: .6rem 1.5rem;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  #panel {
     display: none;
     max-width: 480px;
     margin: 0 auto;
+  }
+  #greeting {
+    text-align: center;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
   }
   .card {
     background: #fff;
@@ -35,65 +54,86 @@
     font-size: 1.1rem;
     font-weight: 600;
   }
-  #empty, #adminLink {
+  #empty {
     text-align: center;
     color: #666;
     margin-top: 2rem;
+  }
+  #logoutRow {
+    text-align: center;
+    margin-top: 2rem;
+    color: #666;
+  }
+  #logoutRow button {
+    cursor: pointer;
   }
 </style>
 </head>
 <body>
 
-<div id="login"><div id="g_id_signin"></div></div>
+<div id="login">
+  <h2>入口網站</h2>
+  <input id="codeInput" type="password" placeholder="請輸入代碼" autocomplete="off">
+  <br>
+  <button onclick="login()">登入</button>
+</div>
 
-<div id="cards"></div>
-<div id="empty" style="display:none">目前沒有可用的系統，請聯繫管理員。</div>
-<p id="adminLink" style="display:none"><a href="admin.html">前往權限管理</a></p>
+<div id="panel">
+  <div id="greeting"></div>
+  <div id="cards"></div>
+  <div id="empty" style="display:none">目前沒有可用的系統，請聯繫管理員。</div>
+  <div id="logoutRow">
+    <a href="admin.html">前往權限管理</a>　|
+    <button onclick="logout()">登出</button>
+  </div>
+</div>
 
 <script src="config.js"></script>
+<script src="session.js"></script>
 <script>
-function initGoogleSignIn() {
-  google.accounts.id.initialize({
-    client_id: OAUTH_CLIENT_ID,
-    callback: handleCredentialResponse
-  });
-  google.accounts.id.renderButton(
-    document.getElementById('g_id_signin'),
-    { theme: 'outline', size: 'large' }
-  );
-}
+var session = makeSession('portal');
 
-function handleCredentialResponse(response) {
-  sessionStorage.setItem('idToken', response.credential);
+document.getElementById('codeInput').addEventListener('keydown', function (evt) {
+  if (evt.key === 'Enter') login();
+});
+
+function login() {
+  var code = document.getElementById('codeInput').value.trim();
+  if (!code) return;
 
   fetch(API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ action: 'getLinks', idToken: response.credential })
+    body: JSON.stringify({ action: 'login', code: code })
   })
     .then(function (r) { return r.json(); })
-    .then(renderResult)
+    .then(function (result) {
+      if (!result.ok) {
+        alert('錯誤：' + result.error);
+        return;
+      }
+      session.save(code, result.name);
+      showPanel(result.name, result.links);
+    })
     .catch(function (err) { alert('連線失敗：' + err.message); });
 }
 
-function renderResult(result) {
-  if (!result.ok) {
-    alert('錯誤：' + result.error);
-    return;
-  }
-
+function showPanel(name, links) {
   document.getElementById('login').style.display = 'none';
-  document.getElementById('adminLink').style.display = 'block';
-
-  if (result.links.length === 0) {
-    document.getElementById('empty').style.display = 'block';
-    return;
-  }
+  document.getElementById('panel').style.display = 'block';
+  document.getElementById('greeting').textContent = '您好，' + name;
 
   var container = document.getElementById('cards');
-  container.style.display = 'block';
+  container.innerHTML = '';
 
-  result.links.forEach(function (link) {
+  var empty = document.getElementById('empty');
+  if (links.length === 0) {
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  links.forEach(function (link) {
     var card = document.createElement('div');
     card.className = 'card';
 
@@ -107,6 +147,21 @@ function renderResult(result) {
     container.appendChild(card);
   });
 }
+
+function logout() {
+  session.clear();
+  document.getElementById('panel').style.display = 'none';
+  document.getElementById('login').style.display = 'block';
+  document.getElementById('codeInput').value = '';
+}
+
+var existing = session.load();
+if (existing) {
+  document.getElementById('codeInput').value = existing.code;
+  login();
+}
+
+session.initIdleTimeout(logout);
 </script>
 </body>
 </html>
