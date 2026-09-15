@@ -6,15 +6,23 @@ function getSystemLink(systemName) {
   return link;
 }
 
+var _cachedSpreadsheet = null;
+
+function getPermissionSpreadsheet() {
+  if (!_cachedSpreadsheet) {
+    var sheetId = PropertiesService.getScriptProperties().getProperty('PERMISSION_SHEET_ID');
+    if (!sheetId) throw new Error('尚未設定 Script Property：PERMISSION_SHEET_ID，請先執行 setup()');
+    _cachedSpreadsheet = SpreadsheetApp.openById(sheetId);
+  }
+  return _cachedSpreadsheet;
+}
+
 function getPermissionSheet() {
-  var sheetId = PropertiesService.getScriptProperties().getProperty('PERMISSION_SHEET_ID');
-  if (!sheetId) throw new Error('尚未設定 Script Property：PERMISSION_SHEET_ID，請先執行 setup()');
-  return SpreadsheetApp.openById(sheetId).getSheetByName('permissions');
+  return getPermissionSpreadsheet().getSheetByName('permissions');
 }
 
 function getLoginLogSheet() {
-  var sheetId = PropertiesService.getScriptProperties().getProperty('PERMISSION_SHEET_ID');
-  return SpreadsheetApp.openById(sheetId).getSheetByName('logins');
+  return getPermissionSpreadsheet().getSheetByName('logins');
 }
 
 function getAllPermissions() {
