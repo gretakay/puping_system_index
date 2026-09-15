@@ -1,1 +1,1 @@
-var API_URL = 'YOUR_GAS_WEB_APP_EXEC_URL';
+var API_URL = 'https://script.google.com/macros/s/AKfycbyjT9b4vsu5UJSD8eao-Cd6aSbhuqRDo7aNuOHRmuYgHzp9OX0wZqTC_EGJghuJLqEW/exec';
