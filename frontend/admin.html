@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>權限管理</title>
+<script src="https://accounts.google.com/gsi/client" async defer onload="initGoogleSignIn()"></script>
+<style>
+  body {
+    font-family: -apple-system, "Segoe UI", sans-serif;
+    background: #f5f5f5;
+    margin: 0;
+    padding: 2rem 1rem;
+  }
+  #login {
+    display: flex;
+    justify-content: center;
+    margin-top: 4rem;
+  }
+  #panel {
+    display: none;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    background: #fff;
+    margin-top: 1rem;
+  }
+  th, td {
+    border: 1px solid #ddd;
+    padding: .5rem .75rem;
+    text-align: center;
+  }
+  th {
+    background: #f0f0f0;
+  }
+  button {
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div id="login"><div id="g_id_signin"></div></div>
+
+<div id="panel">
+  <h2 style="text-align:center">權限管理</h2>
+  <table>
+    <thead><tr id="headerRow"></tr></thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+  <div style="text-align:center; margin-top:1rem">
+    <button onclick="addRow()">新增使用者</button>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script>
+var SYSTEMS = ['物管系統', '會議室預約', '補課查看', '遊覽車'];
+var idToken = null;
+
+function initGoogleSignIn() {
+  google.accounts.id.initialize({
+    client_id: OAUTH_CLIENT_ID,
+    callback: handleCredentialResponse
+  });
+  google.accounts.id.renderButton(
+    document.getElementById('g_id_signin'),
+    { theme: 'outline', size: 'large' }
+  );
+}
+
+function handleCredentialResponse(response) {
+  idToken = response.credential;
+
+  callApi({ action: 'getPermissions' }).then(function (result) {
+    if (!result.ok) {
+      alert('錯誤：' + result.error);
+      return;
+    }
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('panel').style.display = 'block';
+    renderTable(result.permissions);
+  });
+}
+
+function callApi(payload) {
+  payload.idToken = idToken;
+  return fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(payload)
+  }).then(function (r) { return r.json(); });
+}
+
+function renderTable(rows) {
+  var headerRow = document.getElementById('headerRow');
+  headerRow.innerHTML = '<th>Email</th><th>姓名</th>'
+    + SYSTEMS.map(function (s) { return '<th>' + s + '</th>'; }).join('')
+    + '<th>操作</th>';
+
+  var body = document.getElementById('tableBody');
+  body.innerHTML = '';
+  rows.forEach(function (row) { body.appendChild(buildRow(row)); });
+}
+
+function buildRow(row) {
+  var tr = document.createElement('tr');
+
+  var emailTd = document.createElement('td');
+  emailTd.textContent = row['Email'];
+  tr.appendChild(emailTd);
+
+  var nameTd = document.createElement('td');
+  var nameInput = document.createElement('input');
+  nameInput.value = row['姓名'] || '';
+  nameTd.appendChild(nameInput);
+  tr.appendChild(nameTd);
+
+  var checkboxes = {};
+  SYSTEMS.forEach(function (sys) {
+    var td = document.createElement('td');
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !!row[sys];
+    checkboxes[sys] = cb;
+    td.appendChild(cb);
+    tr.appendChild(td);
+  });
+
+  var actionTd = document.createElement('td');
+
+  var saveBtn = document.createElement('button');
+  saveBtn.textContent = '儲存';
+  saveBtn.onclick = function () {
+    var systemFlags = {};
+    SYSTEMS.forEach(function (sys) { systemFlags[sys] = checkboxes[sys].checked; });
+
+    callApi({
+      action: 'setPermission',
+      targetEmail: row['Email'],
+      name: nameInput.value,
+      systems: systemFlags
+    }).then(function (result) {
+      alert(result.ok ? '已儲存' : '儲存失敗：' + result.error);
+    });
+  };
+  actionTd.appendChild(saveBtn);
+
+  var delBtn = document.createElement('button');
+  delBtn.textContent = '刪除';
+  delBtn.style.marginLeft = '.5rem';
+  delBtn.onclick = function () {
+    if (!confirm('確定刪除 ' + row['Email'] + '？')) return;
+    callApi({ action: 'removeUser', targetEmail: row['Email'] }).then(function (result) {
+      if (!result.ok) {
+        alert('刪除失敗：' + result.error);
+        return;
+      }
+      tr.remove();
+    });
+  };
+  actionTd.appendChild(delBtn);
+
+  tr.appendChild(actionTd);
+  return tr;
+}
+
+function addRow() {
+  var email = prompt('請輸入新使用者的 Email：');
+  if (!email) return;
+  document.getElementById('tableBody').appendChild(buildRow({ 'Email': email, '姓名': '' }));
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>入口網站</title>
+<script src="https://accounts.google.com/gsi/client" async defer onload="initGoogleSignIn()"></script>
+<style>
+  body {
+    font-family: -apple-system, "Segoe UI", sans-serif;
+    background: #f5f5f5;
+    margin: 0;
+    padding: 2rem 1rem;
+  }
+  #login {
+    display: flex;
+    justify-content: center;
+    margin-top: 4rem;
+  }
+  #cards {
+    display: none;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  .card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 1rem 1.5rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .1);
+  }
+  .card a {
+    text-decoration: none;
+    color: #1a73e8;
+    font-size: 1.1rem;
+    font-weight: 600;
+  }
+  #empty, #adminLink {
+    text-align: center;
+    color: #666;
+    margin-top: 2rem;
+  }
+</style>
+</head>
+<body>
+
+<div id="login"><div id="g_id_signin"></div></div>
+
+<div id="cards"></div>
+<div id="empty" style="display:none">目前沒有可用的系統，請聯繫管理員。</div>
+<p id="adminLink" style="display:none"><a href="admin.html">前往權限管理</a></p>
+
+<script src="config.js"></script>
+<script>
+function initGoogleSignIn() {
+  google.accounts.id.initialize({
+    client_id: OAUTH_CLIENT_ID,
+    callback: handleCredentialResponse
+  });
+  google.accounts.id.renderButton(
+    document.getElementById('g_id_signin'),
+    { theme: 'outline', size: 'large' }
+  );
+}
+
+function handleCredentialResponse(response) {
+  sessionStorage.setItem('idToken', response.credential);
+
+  fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ action: 'getLinks', idToken: response.credential })
+  })
+    .then(function (r) { return r.json(); })
+    .then(renderResult)
+    .catch(function (err) { alert('連線失敗：' + err.message); });
+}
+
+function renderResult(result) {
+  if (!result.ok) {
+    alert('錯誤：' + result.error);
+    return;
+  }
+
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('adminLink').style.display = 'block';
+
+  if (result.links.length === 0) {
+    document.getElementById('empty').style.display = 'block';
+    return;
+  }
+
+  var container = document.getElementById('cards');
+  container.style.display = 'block';
+
+  result.links.forEach(function (link) {
+    var card = document.createElement('div');
+    card.className = 'card';
+
+    var a = document.createElement('a');
+    a.href = link.url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.textContent = link.name;
+
+    card.appendChild(a);
+    container.appendChild(card);
+  });
+}
+</script>
+</body>
+</html>
