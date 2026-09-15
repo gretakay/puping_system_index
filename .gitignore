@@ -1,0 +1,7 @@
+node_modules/
+.DS_Store
+.clasprc.json
+*.env
+
+# 含實際存取金鑰／管理員網址，不進版控
+入口網站規劃.md
